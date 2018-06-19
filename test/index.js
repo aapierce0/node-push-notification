@@ -2,7 +2,7 @@
 const Barrier = require('cb-barrier');
 const Code = require('code');
 const Lab = require('lab');
-const NodePush = require('../lib');
+const PushDispatch = require('../lib');
 
 // Test shortcuts
 const lab = exports.lab = Lab.script();
@@ -10,62 +10,57 @@ const { describe, it } = lab;
 const { expect } = Code;
 
 
-describe('NodePush', () => {
+describe('PushDispatch', () => {
   describe('constructor', () => {
     it('instantiates a new NodePush', () => {
-      const push = new NodePush();
+      const push = new PushDispatch();
 
       expect(push.transports).to.be.an.instanceof(Map);
     });
   });
 
-  describe('addTransport()', () => {
-    it('supports multiple platforms', () => {
-      const push = new NodePush();
-      const t1 = { platform: 'iOS' };
-      const t2 = { platform: ['sns', 'apns', 'apple', 'android'] };
+  describe('useTransport()', () => {
+    it('supports multiple transports', () => {
+      const push = new PushDispatch();
 
-      push.addTransport(t1);
-      push.addTransport(t2);
+      const t1 = {platform: 'APNS'};
+      push.useTransport('com.example.apns', t1);
 
-      expect(push.transports.size).to.equal(5);
+      const t2 = {platform: 'Firebase'};
+      push.useTransport('com.example.firebase', t2);
+
+      expect(push.transports.size).to.equal(2);
 
       // Verify that platforms are case insensitive.
-      expect(push.transports.get('ios')).to.equal(t1);
-
-      expect(push.transports.get('sns')).to.equal(t2);
-      expect(push.transports.get('apns')).to.equal(t2);
-      expect(push.transports.get('apple')).to.equal(t2);
-      expect(push.transports.get('android')).to.equal(t2);
+      expect(push.transports.get('com.example.apns')).to.equal(t1);
+      expect(push.transports.get('com.example.firebase')).to.equal(t2);
 
       // Verify that existing transports are not overwritten.
       expect(() => {
-        push.addTransport({ platform: 'Apple' });
-      }).to.throw(Error, 'platform Apple is already configured');
+        push.useTransport('com.example.apns', {platform: 'Apple'});
+      }).to.throw(Error, 'transport com.example.apns is already configured');
 
       // Verify that the platform name must be a string.
       expect(() => {
-        push.addTransport({ platform: null });
-      }).to.throw(TypeError, 'platform name must be a string');
+        push.useTransport(null, {platform: 'Email'});
+      }).to.throw(TypeError, 'transportIdentifier must be a string');
     });
   });
 
   describe('send()', () => {
     it('calls the transport\'s send() method', () => {
       const barrier = new Barrier();
-      const push = new NodePush();
+      const push = new PushDispatch();
 
-      push.addTransport({
-        platform: 'sns',
-        send (platform, device, message, options, callback) {
-          expect(platform).to.equal('sns');
+      push.useTransport('com.test.sns', {
+        send (device, message, options, callback) {
           expect(device).to.equal('mydeviceid');
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
           callback();
         }
       });
-      push.send('SNS', 'mydeviceid', { title: 'hello' }, (err) => {
+      push.send('com.test.sns', 'mydeviceid', { title: 'hello' }, (err) => {
         expect(err).to.not.exist();
         barrier.pass();
       });
@@ -75,12 +70,10 @@ describe('NodePush', () => {
 
     it('callback is a noop if one is not provided', () => {
       const barrier = new Barrier();
-      const push = new NodePush();
+      const push = new PushDispatch();
 
-      push.addTransport({
-        platform: 'sns',
-        send (platform, device, message, options, callback) {
-          expect(platform).to.equal('sns');
+      push.useTransport('com.test.sns', {
+        send (device, message, options, callback) {
           expect(device).to.equal('mydeviceid');
           expect(message).to.equal({ title: 'hello', body: 'world!' });
           expect(options).to.equal({});
@@ -89,19 +82,17 @@ describe('NodePush', () => {
           barrier.pass();
         }
       });
-      push.send('SNS', 'mydeviceid', { title: 'hello', body: 'world!' });
+      push.send('com.test.sns', 'mydeviceid', { title: 'hello', body: 'world!' });
 
       return barrier;
     });
 
     it('the options argument is forced to an empty object', () => {
       const barrier = new Barrier();
-      const push = new NodePush();
+      const push = new PushDispatch();
 
-      push.addTransport({
-        platform: 'sns',
-        send (platform, device, message, options, callback) {
-          expect(platform).to.equal('sns');
+      push.useTransport('com.test.sns', {
+        send (device, message, options, callback) {
           expect(device).to.equal('mydeviceid');
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
@@ -109,17 +100,17 @@ describe('NodePush', () => {
           barrier.pass();
         }
       });
-      push.send('SNS', 'mydeviceid', { title: 'hello' }, null);
+      push.send('com.test.sns', 'mydeviceid', { title: 'hello' }, null);
 
       return barrier;
     });
 
     it('throws if a transport does not exist for the platform', () => {
-      const push = new NodePush();
+      const push = new PushDispatch();
 
       expect(() => {
-        push.send('sns', 'mydeviceid', {});
-      }).to.throw(Error, 'cannot send to unsupported platform sns');
+        push.send('com.test.sns', 'mydeviceid', {});
+      }).to.throw(Error, 'cannot send to unsupported transport com.test.sns');
     });
   });
 });
