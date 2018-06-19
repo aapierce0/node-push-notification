@@ -1,16 +1,13 @@
 {
-  "name": "node-push-notification",
+  "name": "push-dispatch",
   "version": "0.1.0",
-  "description": "multi-platform capable push notifications using Node.js",
-  "author": "Continuation Labs <contact@continuation.io> (http://continuation.io/)",
+  "description": "Dispatch push notifications to all of a user's connected devices.",
+  "author": "Avery Pierce <aapierce0@gmail.com>",
   "main": "lib/index.js",
-  "homepage": "https://github.com/continuationlabs/node-push-notification",
+  "homepage": "https://github.com/aapierce0/push-dispatch",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/continuationlabs/node-push-notification.git"
-  },
-  "bugs": {
-    "url": "https://github.com/continuationlabs/node-push-notification/issues"
+    "url": "git+https://github.com/aapierce0/push-dispatch.git"
   },
   "license": "MIT",
   "scripts": {
@@ -31,6 +28,8 @@
     "push",
     "notification",
     "notifications",
-    "push notifications"
+    "push notifications",
+    "dispatch",
+    "push dispatch"
   ]
 }
