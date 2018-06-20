@@ -13,7 +13,8 @@
   "scripts": {
     "lint": "belly-button -f",
     "pretest": "npm run lint",
-    "test": "lab -v -a code -t 100"
+    "test": "lab -v -a code -t 100",
+    "test-cov-html": "lab -r html -o coverage.html"
   },
   "engines": {
     "node": ">=8.0.0"
