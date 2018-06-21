@@ -4,7 +4,7 @@ const Code = require('code');
 const Lab = require('lab');
 
 const PushDispatch = require('../lib');
-const MemoryBackingStore = require('../lib/MemoryBackingStore.js');
+const preloadedBackingStore = require('./PreloadedMemoryBackingStore.js');
 
 const MockBackingStore = require('./MockBackingStore.js');
 
@@ -160,16 +160,12 @@ describe('PushDispatch', () => {
   describe('sendMessageToDevice()', function () {
     it('should generate an event to the proper service', function () {
       const barrier = new Barrier(2);
-      const backingStore = new MemoryBackingStore();
-      backingStore.devices.set('device1', {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey'
-      });
+      const backingStore = preloadedBackingStore.basic();
       const push = new PushDispatch(backingStore);
 
       push.useTransport('com.example.test1', {
         send (device, message, options, callback) {
-          expect(device).to.equal('deliveryKey');
+          expect(device).to.equal('deliveryKey1');
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
           callback();
@@ -177,12 +173,12 @@ describe('PushDispatch', () => {
         }
       });
 
-      push.sendMessageToDevice('device1', 'event1', {title: 'hello'}, {}, (error) => {
+      push.sendMessageToDevice('device1', 'new_event', {title: 'hello'}, {}, (error) => {
         expect(error).to.not.exist();
 
         const transactions = Array.from(backingStore.transactions.values());
-        expect(transactions).to.only.include({
-          eventID: 'event1',
+        expect(transactions).to.include({
+          eventID: 'new_event',
           deviceID: 'device1'
         });
 
@@ -234,34 +230,21 @@ describe('PushDispatch', () => {
   });
 
   describe('sendMessageToUser()', function () {
-    it('should send the message to all of a user\'s devices', function () {
+    it('should dispatch the message to all of a user\'s devices on the same transport', function () {
       const barrier = new Barrier(3);
-      const backingStore = new MemoryBackingStore();
-      backingStore.devices.set('device1', {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey1'
-      });
-
-      backingStore.devices.set('device2', {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey2'
-      });
-
-      backingStore.users.set('user1', {
-        devices: new Set(['device1', 'device2'])
-      });
-
+      const backingStore = preloadedBackingStore.basic();
       const push = new PushDispatch(backingStore);
-      push.useTransport('com.example.test1', {
+
+      push.useTransport('com.example.test2', {
         send (device, message, options, callback) {
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
 
           // Pass once for each delivery key
-          if (device === 'deliveryKey1') {
+          if (device === 'deliveryKey4') {
             barrier.pass();
           }
-          if (device === 'deliveryKey2') {
+          if (device === 'deliveryKey5') {
             barrier.pass();
           }
 
@@ -269,18 +252,63 @@ describe('PushDispatch', () => {
         }
       });
 
-      push.sendMessageToUser('user1', 'event1', {title: 'hello'}, {}, (error) => {
+      push.sendMessageToUser('user3', 'new_event', {title: 'hello'}, {}, (error) => {
         expect(error).to.not.exist();
 
         const transactions = Array.from(backingStore.transactions.values());
-        expect(transactions).to.only.include([
+        expect(transactions).to.include([
           {
-            eventID: 'event1',
-            deviceID: 'device1'
+            eventID: 'new_event',
+            deviceID: 'device4'
           },
           {
-            eventID: 'event1',
+            eventID: 'new_event',
+            deviceID: 'device5'
+          }
+        ]);
+        barrier.pass();
+      });
+
+      return barrier;
+    });
+
+    it('should dispatch the message to all of a user\'s devices on differing transports', function () {
+      const barrier = new Barrier(3);
+      const backingStore = preloadedBackingStore.basic();
+      const push = new PushDispatch(backingStore);
+
+      push.useTransport('com.example.test1', {
+        send (device, message, options, callback) {
+          expect(message).to.equal({ title: 'hello' });
+          expect(options).to.equal({});
+          expect(device).to.equal('deliveryKey2');
+          barrier.pass();
+          callback();
+        }
+      });
+
+      push.useTransport('com.example.test2', {
+        send (device, message, options, callback) {
+          expect(message).to.equal({ title: 'hello' });
+          expect(options).to.equal({});
+          expect(device).to.equal('deliveryKey3');
+          barrier.pass();
+          callback();
+        }
+      });
+
+      push.sendMessageToUser('user2', 'new_event', {title: 'hello'}, {}, (error) => {
+        expect(error).to.not.exist();
+
+        const transactions = Array.from(backingStore.transactions.values());
+        expect(transactions).to.include([
+          {
+            eventID: 'new_event',
             deviceID: 'device2'
+          },
+          {
+            eventID: 'new_event',
+            deviceID: 'device3'
           }
         ]);
         barrier.pass();
@@ -308,29 +336,16 @@ describe('PushDispatch', () => {
 
     it('should properly handle an error generated by the service', function () {
       const barrier = new Barrier();
-      const backingStore = new MemoryBackingStore();
-      backingStore.devices.set('device1', {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey1'
-      });
-
-      backingStore.devices.set('device2', {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey2'
-      });
-
-      backingStore.users.set('user1', {
-        devices: new Set(['device1', 'device2'])
-      });
-
+      const backingStore = preloadedBackingStore.basic();
       const push = new PushDispatch(backingStore);
-      push.useTransport('com.example.test1', {
+
+      push.useTransport('com.example.test2', {
         send (device, message, options, callback) {
           callback(new Error('An error occurred sending the message!'));
         }
       });
 
-      push.sendMessageToUser('user1', 'event1', {title: 'hello'}, {}, (error) => {
+      push.sendMessageToUser('user3', 'new_event', {title: 'hello'}, {}, (error) => {
         expect(error).to.be.error(Error, 'An error occurred sending the message!');
         barrier.pass();
       });

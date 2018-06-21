@@ -3,6 +3,7 @@ const Barrier = require('cb-barrier');
 const Code = require('code');
 const Lab = require('lab');
 const MemoryBackingStore = require('../lib/MemoryBackingStore.js');
+const preloadedBackingStore = require('./PreloadedMemoryBackingStore.js');
 
 // Test shortcuts
 const lab = exports.lab = Lab.script();
@@ -23,38 +24,73 @@ describe('MemoryBackingStore', function () {
   describe('addDevice()', function () {
     it('should add a new device to the store', function () {
       const barrier = new Barrier();
-      const backingStore = new MemoryBackingStore();
+      const backingStore = preloadedBackingStore.basic();
 
-      backingStore.addDevice('device1', 'com.example.test1', 'deliveryKey', (error) => {
+      // Make sure this device doesn't already exist
+      expect(backingStore.devices.get('test_device1')).to.not.exist();
+
+      // Add the new device
+      backingStore.addDevice('test_device1', 'com.example.apns', 'test_deliveryKey', (error) => {
         expect(error).to.not.exist();
 
-        const device = backingStore.devices.get('device1');
+        const device = backingStore.devices.get('test_device1');
         expect(device).to.exist();
-        expect(device.transportIdentifier).to.equal('com.example.test1');
-        expect(device.deliveryKey).to.equal('deliveryKey');
+        expect(device.transportIdentifier).to.equal('com.example.apns');
+        expect(device.deliveryKey).to.equal('test_deliveryKey');
         barrier.pass();
       });
 
       return barrier;
+    });
+
+    it('should overwrite an exisiting device if it\'s passed in', function () {
+      const barrier = new Barrier();
+      const backingStore = preloadedBackingStore.basic();
+
+      // Make sure this device already exists
+      expect(backingStore.devices.get('device1')).to.exist();
+
+      // Overwrite the device
+      backingStore.addDevice('device1', 'com.example.apns', 'test_deliveryKey', (error) => {
+        expect(error).to.not.exist();
+
+        const device = backingStore.devices.get('device1');
+        expect(device).to.exist();
+        expect(device.transportIdentifier).to.equal('com.example.apns');
+        expect(device.deliveryKey).to.equal('test_deliveryKey');
+        barrier.pass();
+      });
     });
   });
 
   describe('fetchDevice()', function () {
     it('should return the device for a deviceid', function () {
       const barrier = new Barrier();
-      const mockDevice = {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey'
-      };
-      const backingStore = new MemoryBackingStore();
-      backingStore.devices.set('device1', mockDevice);
+      const backingStore = preloadedBackingStore.basic();
 
       backingStore.fetchDevice('device1', (error, device) => {
         expect(error).to.not.exist();
 
         expect(device).to.exist();
         expect(device.transportIdentifier).to.equal('com.example.test1');
-        expect(device.deliveryKey).to.equal('deliveryKey');
+        expect(device.deliveryKey).to.equal('deliveryKey1');
+        barrier.pass();
+      });
+
+      return barrier;
+    });
+
+    it('should generate an error for an unknown device', function () {
+      const barrier = new Barrier();
+      const backingStore = preloadedBackingStore.basic();
+
+      // Make sure the device doesn't already exist.
+      expect(backingStore.devices.get('some_unknown_device')).to.not.exist();
+
+      // Attempt to fetch the device that doesn't exist.
+      backingStore.fetchDevice('some_unknown_device', (error, device) => {
+        expect(error).to.be.error(Error, 'Device some_unknown_device not found.');
+        expect(device).to.not.exist();
         barrier.pass();
       });
 
@@ -62,43 +98,43 @@ describe('MemoryBackingStore', function () {
     });
   });
 
+
   describe('associateDevice()', function () {
     it('should associate the device with an existing user', function () {
       const barrier = new Barrier();
-      const backingStore = new MemoryBackingStore();
-      const mockDevice = {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey'
-      };
-      backingStore.devices.set('device1', mockDevice);
+      const backingStore = preloadedBackingStore.basic();
 
-      const mockUser = {
-        devices: new Set(['device1'])
-      };
-      backingStore.users.set('user1', mockUser);
+      // Verify that 'user2' doesn't already have device 6 to avoid a false positive.
+      const user = backingStore.users.get('user2');
+      expect(Array.from(user.devices)).to.not.include('device6');
 
-      backingStore.associateDevice('device2', 'user1', (error) => {
+      // Associate device 6 (currently unassigned to anyone) to user2
+      backingStore.associateDevice('device6', 'user2', (error) => {
         expect(error).to.not.exist();
 
-        const user = backingStore.users.get('user1');
-        expect(user).to.exist();
-        expect(user.devices).to.be.an.instanceof(Set);
-        expect(Array.from(user.devices)).to.only.include(['device1', 'device2']);
+        // Verify that the device was added
+        const user = backingStore.users.get('user2');
+        expect(Array.from(user.devices)).to.include('device6');
         barrier.pass();
       });
     });
 
     it('should associate the device with a new user', function () {
       const barrier = new Barrier();
-      const backingStore = new MemoryBackingStore();
+      const backingStore = preloadedBackingStore.basic();
 
-      backingStore.associateDevice('device1', 'user1', (error) => {
+      // Verify that 'new_user' doesn't already exist
+      expect(backingStore.users.get('new_user')).to.not.exist();
+
+      // Associate the device
+      backingStore.associateDevice('device6', 'new_user', (error) => {
         expect(error).to.not.exist();
 
-        const user = backingStore.users.get('user1');
+        // Verify that the new user object was created and that the device is added to it.
+        const user = backingStore.users.get('new_user');
         expect(user).to.exist();
         expect(user.devices).to.be.an.instanceof(Set);
-        expect(Array.from(user.devices)).to.only.include('device1');
+        expect(Array.from(user.devices)).to.only.include('device6');
         barrier.pass();
       });
 
@@ -109,25 +145,21 @@ describe('MemoryBackingStore', function () {
   describe('dissociateDevice()', function () {
     it('should dissociate the device from an existing user', function () {
       const barrier = new Barrier();
-      const backingStore = new MemoryBackingStore();
-      const mockDevice = {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey'
-      };
-      backingStore.devices.set('device1', mockDevice);
+      const backingStore = preloadedBackingStore.basic();
 
-      const mockUser = {
-        devices: new Set(['device1'])
-      };
-      backingStore.users.set('user1', mockUser);
+      // Verify that user2 exists, and that it owns 'device3'
+      const user = backingStore.users.get('user2');
+      expect(Array.from(user.devices)).to.include('device3');
 
-      backingStore.dissociateDevice('device1', 'user1', (error) => {
+      // Attempt to dissociate the device
+      backingStore.dissociateDevice('device3', 'user2', (error) => {
         expect(error).to.not.exist();
 
-        const user = backingStore.users.get('user1');
+        // Verify that the device was removed.
+        const user = backingStore.users.get('user2');
         expect(user).to.exist();
         expect(user.devices).to.be.an.instanceof(Set);
-        expect(Array.from(user.devices)).to.be.empty();
+        expect(Array.from(user.devices)).to.not.include('device3');
         barrier.pass();
       });
 
@@ -136,9 +168,13 @@ describe('MemoryBackingStore', function () {
 
     it('should gracefully handle when the user doesn\'t exist', function () {
       const barrier = new Barrier();
-      const backingStore = new MemoryBackingStore();
+      const backingStore = preloadedBackingStore.basic();
 
-      backingStore.dissociateDevice('device1', 'user1', (error) => {
+      // Verify that the user doesn't exist
+      expect(backingStore.users.get('new_user')).to.not.exist();
+
+      // Attempt to remove the device from the user
+      backingStore.dissociateDevice('device1', 'new_user', (error) => {
         expect(error).to.not.exist();
         barrier.pass();
       });
@@ -150,24 +186,14 @@ describe('MemoryBackingStore', function () {
   describe('fetchDeviceIDsForUser()', function () {
     it('should fetch all the devices for a user', function () {
       const barrier = new Barrier();
-      const backingStore = new MemoryBackingStore();
-      const mockDevice = {
-        transportIdentifier: 'com.example.test1',
-        deliveryKey: 'deliveryKey'
-      };
-      backingStore.devices.set('device1', mockDevice);
+      const backingStore = preloadedBackingStore.basic();
 
-      const mockUser = {
-        devices: new Set(['device1'])
-      };
-      backingStore.users.set('user1', mockUser);
-
-      backingStore.fetchDeviceIDsForUser('user1', (error, deviceIDs) => {
+      backingStore.fetchDeviceIDsForUser('user2', (error, deviceIDs) => {
         expect(error).to.not.exist();
 
         expect(deviceIDs).to.exist();
         expect(deviceIDs).to.be.an.instanceof(Set);
-        expect(Array.from(deviceIDs)).to.only.include('device1');
+        expect(Array.from(deviceIDs)).to.only.include(['device2', 'device3']);
         barrier.pass();
       });
 
@@ -178,7 +204,10 @@ describe('MemoryBackingStore', function () {
       const barrier = new Barrier();
       const backingStore = new MemoryBackingStore();
 
-      backingStore.fetchDeviceIDsForUser('user1', (error, deviceIDs) => {
+      // Verify that the user indeed doesn't exist
+      expect(backingStore.users.get('unknown_user')).to.not.exist();
+
+      backingStore.fetchDeviceIDsForUser('unknown_user', (error, deviceIDs) => {
         expect(error).to.not.exist();
 
         expect(deviceIDs).to.exist();
@@ -196,13 +225,13 @@ describe('MemoryBackingStore', function () {
       const barrier = new Barrier();
       const backingStore = new MemoryBackingStore();
 
-      backingStore.createTransaction('event1', 'device1', (error, txID) => {
+      backingStore.createTransaction('new_event', 'device1', (error, txID) => {
         expect(error).to.not.exist();
         expect(txID).to.be.a.string();
 
         const tx = backingStore.transactions.get(txID);
         expect(tx).to.exist();
-        expect(tx.eventID).to.equal('event1');
+        expect(tx.eventID).to.equal('new_event');
         expect(tx.deviceID).to.equal('device1');
         barrier.pass();
       });
@@ -214,25 +243,13 @@ describe('MemoryBackingStore', function () {
   describe('transactionsForEvent()', function () {
     it('should find all the transactions for a specified event ID', function () {
       const barrier = new Barrier();
-      const backingStore = new MemoryBackingStore();
+      const backingStore = preloadedBackingStore.basic();
 
-      const mockTransaction1 = {
-        eventID: 'event1',
-        deviceID: 'device1'
-      };
-      backingStore.transactions.set('transaction1', mockTransaction1);
-
-      const mockTransaction2 = {
-        eventID: 'event2',
-        deviceID: 'device1'
-      };
-      backingStore.transactions.set('transaction2', mockTransaction2);
-
-      backingStore.fetchTransactionsForEvent('event1', (error, txIDs) => {
+      backingStore.fetchTransactionsForEvent('event4', (error, txIDs) => {
         expect(error).to.not.exist();
 
         expect(txIDs).to.be.an.instanceof(Set);
-        expect(Array.from(txIDs)).to.only.include('transaction1');
+        expect(Array.from(txIDs)).to.only.include(['tx5', 'tx6']);
         barrier.pass();
       });
 
