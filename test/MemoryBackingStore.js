@@ -2,7 +2,10 @@
 const Barrier = require('cb-barrier');
 const Code = require('code');
 const Lab = require('lab');
-const MemoryBackingStore = require('../lib/MemoryBackingStore.js');
+
+const PushDispatch = require('../lib');
+const MemoryBackingStore = PushDispatch.MemoryBackingStore;
+
 const preloadedBackingStore = require('./PreloadedMemoryBackingStore.js');
 
 // Test shortcuts
