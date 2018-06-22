@@ -33,7 +33,7 @@ describe('Dispatcher', () => {
         fetchDevice () {},
         associateDevice () {},
         dissociateDevice () {},
-        fetchDeviceIDsForUser () {},
+        fetchDevicesForUser () {},
         createTransaction () {},
         fetchTransactionsForEvent () {}
       };
@@ -78,12 +78,12 @@ describe('Dispatcher', () => {
       }).to.throw(Error, 'Backing store must have a dissociateDevice method');
     });
 
-    it('throws an error if the backing store doesn\'t have a fetchDeviceIDsForUser method', function () {
+    it('throws an error if the backing store doesn\'t have a fetchDevicesForUser method', function () {
       expect(() => {
         const backingStore = dummyBackingStore();
-        delete backingStore['fetchDeviceIDsForUser'];
+        delete backingStore['fetchDevicesForUser'];
         Dispatcher._validateBackingStore(backingStore);
-      }).to.throw(Error, 'Backing store must have a fetchDeviceIDsForUser method');
+      }).to.throw(Error, 'Backing store must have a fetchDevicesForUser method');
     });
 
     it('throws an error if the backing store doesn\'t have a createTransaction method', function () {
@@ -198,6 +198,29 @@ describe('Dispatcher', () => {
     });
   });
 
+  describe('addDevice()', function () {
+    it('should add a new device to the backing store', function () {
+      const barrier = new Barrier();
+      const backingStore = new MockBackingStore({
+        'addDevice': (deviceID, transportIdentifier, deliveryKey, callback) => {
+          expect(deviceID).to.equal('device1');
+          expect(transportIdentifier).to.equal('com.example.test1');
+          expect(deliveryKey).to.equal('deliveryKey1');
+          barrier.pass();
+          callback();
+        }
+      });
+      const push = new Dispatcher(backingStore);
+
+      // Add the new device
+      push.addDevice('device1', 'com.example.test1', 'deliveryKey1', (error) => {
+        expect(error).to.not.exist();
+      });
+
+      return barrier;
+    });
+  });
+
   describe('associateDevice()', function () {
     it('should call the backing store to associate the device', function () {
       const barrier = new Barrier();
@@ -237,7 +260,7 @@ describe('Dispatcher', () => {
   });
 
 
-  describe('sendMessageToDevice()', function () {
+  describe('sendMessageToDeviceID()', function () {
     it('should generate an event to the proper service', function () {
       const barrier = new Barrier(2);
       const backingStore = preloadedBackingStore.basic();
@@ -253,7 +276,7 @@ describe('Dispatcher', () => {
         }
       });
 
-      push.sendMessageToDevice('device1', 'new_event', {title: 'hello'}, {}, (error) => {
+      push.sendMessageToDeviceID('device1', 'new_event', {title: 'hello'}, {}, (error) => {
         expect(error).to.not.exist();
 
         const transactions = Array.from(backingStore.transactions.values());
@@ -272,13 +295,20 @@ describe('Dispatcher', () => {
     it('reports an error from create transaction', function () {
       const barrier = new Barrier();
       const backingStore = new MockBackingStore({
+        fetchDevice (deviceID, callback) {
+          callback(null, {
+            deviceID: 'device1',
+            transportIdentifier: 'com.example.test1',
+            deliveryKey: 'deliveryKey1'
+          });
+        },
         createTransaction (eventID, deviceID, callback) {
           callback(new Error('An error occurred when creating a transaction!'));
         }
       });
 
       const push = new Dispatcher(backingStore);
-      push.sendMessageToDevice('device1', 'event1', {title: 'hello'}, {}, (error) => {
+      push.sendMessageToDeviceID('device1', 'event1', {title: 'hello'}, {}, (error) => {
         expect(error).to.exist();
         expect(error).to.be.error(Error, 'An error occurred when creating a transaction!');
         barrier.pass();
@@ -299,7 +329,7 @@ describe('Dispatcher', () => {
       });
 
       const push = new Dispatcher(backingStore);
-      push.sendMessageToDevice('device1', 'event1', {title: 'hello'}, {}, (error) => {
+      push.sendMessageToDeviceID('device1', 'event1', {title: 'hello'}, {}, (error) => {
         expect(error).to.exist();
         expect(error).to.be.error(Error, 'An error occurred fetching the device!');
         barrier.pass();
@@ -400,14 +430,14 @@ describe('Dispatcher', () => {
     it('should properly handle an error when fetching device IDs', function () {
       const barrier = new Barrier();
       const backingStore = new MockBackingStore({
-        fetchDeviceIDsForUser (userID, callback) {
-          callback(new Error('An error occurred fetching device IDs!'));
+        fetchDevicesForUser (userID, callback) {
+          callback(new Error('An error occurred fetching devices!'));
         }
       });
 
       const push = new Dispatcher(backingStore);
       push.sendMessageToUser('user1', 'event1', {title: 'hello'}, {}, (error) => {
-        expect(error).to.be.error(Error, 'An error occurred fetching device IDs!');
+        expect(error).to.be.error(Error, 'An error occurred fetching devices!');
         barrier.pass();
       });
 

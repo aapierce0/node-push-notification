@@ -186,17 +186,29 @@ describe('MemoryBackingStore', function () {
     });
   });
 
-  describe('fetchDeviceIDsForUser()', function () {
+  describe('fetchDevicesForUser()', function () {
     it('should fetch all the devices for a user', function () {
       const barrier = new Barrier();
       const backingStore = preloadedBackingStore.basic();
 
-      backingStore.fetchDeviceIDsForUser('user2', (error, deviceIDs) => {
+      backingStore.fetchDevicesForUser('user2', (error, deviceIDs) => {
         expect(error).to.not.exist();
 
         expect(deviceIDs).to.exist();
         expect(deviceIDs).to.be.an.instanceof(Set);
-        expect(Array.from(deviceIDs)).to.only.include(['device2', 'device3']);
+        expect(Array.from(deviceIDs)).to.only.include([
+          {
+            transportIdentifier: 'com.example.test1',
+            deliveryKey: 'deliveryKey2',
+            deviceID: 'device2'
+          },
+          {
+            transportIdentifier: 'com.example.test2',
+            deliveryKey: 'deliveryKey3',
+            deviceID: 'device3'
+          }
+        ]);
+
         barrier.pass();
       });
 
@@ -210,7 +222,7 @@ describe('MemoryBackingStore', function () {
       // Verify that the user indeed doesn't exist
       expect(backingStore.users.get('unknown_user')).to.not.exist();
 
-      backingStore.fetchDeviceIDsForUser('unknown_user', (error, deviceIDs) => {
+      backingStore.fetchDevicesForUser('unknown_user', (error, deviceIDs) => {
         expect(error).to.not.exist();
 
         expect(deviceIDs).to.exist();
