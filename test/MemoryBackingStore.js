@@ -264,7 +264,19 @@ describe('MemoryBackingStore', function () {
         expect(error).to.not.exist();
 
         expect(txIDs).to.be.an.instanceof(Set);
-        expect(Array.from(txIDs)).to.only.include(['tx5', 'tx6']);
+        expect(Array.from(txIDs)).to.only.include([
+          { transactionID: 'tx5',
+            eventID: 'event4',
+            device:
+            { transportIdentifier: 'com.example.test1',
+              deliveryKey: 'deliveryKey2',
+              deviceID: 'device2' } },
+          { transactionID: 'tx6',
+            eventID: 'event4',
+            device:
+              { transportIdentifier: 'com.example.test2',
+                deliveryKey: 'deliveryKey3',
+                deviceID: 'device3' } }]);
         barrier.pass();
       });
 
