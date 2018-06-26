@@ -137,14 +137,16 @@ describe('Dispatcher', () => {
       const push = new Dispatcher(new MemoryBackingStore());
 
       push.useTransport('com.test.sns', {
-        send (device, message, options, callback) {
+        send (eventID, transactionID, device, message, options, callback) {
+          expect(eventID).to.equal('event1');
+          expect(transactionID).to.equal('tx1');
           expect(device).to.equal('mydeviceid');
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
           callback();
         }
       });
-      push.dispatch('com.test.sns', 'mydeviceid', { title: 'hello' }, (err) => {
+      push.dispatch('event1', 'tx1', 'com.test.sns', 'mydeviceid', { title: 'hello' }, (err) => {
         expect(err).to.not.exist();
         barrier.pass();
       });
@@ -157,7 +159,9 @@ describe('Dispatcher', () => {
       const push = new Dispatcher(new MemoryBackingStore());
 
       push.useTransport('com.test.sns', {
-        send (device, message, options, callback) {
+        send (eventID, transactionID, device, message, options, callback) {
+          expect(eventID).to.equal('event1');
+          expect(transactionID).to.equal('tx1');
           expect(device).to.equal('mydeviceid');
           expect(message).to.equal({ title: 'hello', body: 'world!' });
           expect(options).to.equal({});
@@ -166,7 +170,7 @@ describe('Dispatcher', () => {
           barrier.pass();
         }
       });
-      push.dispatch('com.test.sns', 'mydeviceid', { title: 'hello', body: 'world!' });
+      push.dispatch('event1', 'tx1', 'com.test.sns', 'mydeviceid', { title: 'hello', body: 'world!' });
 
       return barrier;
     });
@@ -176,7 +180,9 @@ describe('Dispatcher', () => {
       const push = new Dispatcher(new MemoryBackingStore());
 
       push.useTransport('com.test.sns', {
-        send (device, message, options, callback) {
+        send (eventID, transactionID, device, message, options, callback) {
+          expect(eventID).to.equal('event1');
+          expect(transactionID).to.equal('tx1');
           expect(device).to.equal('mydeviceid');
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
@@ -184,17 +190,22 @@ describe('Dispatcher', () => {
           barrier.pass();
         }
       });
-      push.dispatch('com.test.sns', 'mydeviceid', { title: 'hello' }, null);
+      push.dispatch('event1', 'tx1', 'com.test.sns', 'mydeviceid', { title: 'hello' }, null);
 
       return barrier;
     });
 
-    it('throws if a transport does not exist for the platform', () => {
+    it('calls the callback with an error if a transport does not exist for the platform', () => {
+      const barrier = new Barrier();
       const push = new Dispatcher(new MemoryBackingStore());
 
-      expect(() => {
-        push.dispatch('com.test.sns', 'mydeviceid', {});
-      }).to.throw(Error, 'cannot send to unsupported transport com.test.sns');
+      push.dispatch('event1', 'transactionID', 'com.test.sns', 'mydeviceid', {}, (error, result) => {
+        expect(error).to.be.error(Error, 'cannot send to unsupported transport com.test.sns');
+        expect(result).to.not.exist();
+        barrier.pass();
+      });
+
+      return barrier;
     });
   });
 
@@ -267,7 +278,9 @@ describe('Dispatcher', () => {
       const push = new Dispatcher(backingStore);
 
       push.useTransport('com.example.test1', {
-        send (device, message, options, callback) {
+        send (eventID, transactionID, device, message, options, callback) {
+          expect(eventID).to.equal('new_event');
+          expect(transactionID).to.be.a.string();
           expect(device).to.equal('deliveryKey1');
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
@@ -346,7 +359,8 @@ describe('Dispatcher', () => {
       const push = new Dispatcher(backingStore);
 
       push.useTransport('com.example.test2', {
-        send (device, message, options, callback) {
+        send (eventID, transactionID, device, message, options, callback) {
+          expect(eventID).to.equal('new_event');
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
 
@@ -388,7 +402,9 @@ describe('Dispatcher', () => {
       const push = new Dispatcher(backingStore);
 
       push.useTransport('com.example.test1', {
-        send (device, message, options, callback) {
+        send (eventID, transactionID, device, message, options, callback) {
+          expect(eventID).to.equal('new_event');
+          expect(transactionID).to.be.a.string();
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
           expect(device).to.equal('deliveryKey2');
@@ -398,7 +414,9 @@ describe('Dispatcher', () => {
       });
 
       push.useTransport('com.example.test2', {
-        send (device, message, options, callback) {
+        send (eventID, transactionID, device, message, options, callback) {
+          expect(eventID).to.equal('new_event');
+          expect(transactionID).to.be.a.string();
           expect(message).to.equal({ title: 'hello' });
           expect(options).to.equal({});
           expect(device).to.equal('deliveryKey3');
@@ -450,7 +468,7 @@ describe('Dispatcher', () => {
       const push = new Dispatcher(backingStore);
 
       push.useTransport('com.example.test2', {
-        send (device, message, options, callback) {
+        send (eventID, transactionID, device, message, options, callback) {
           callback(new Error('An error occurred sending the message!'));
         }
       });
